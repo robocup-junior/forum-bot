@@ -1,0 +1,22 @@
+[workspace]
+name = "forum-bot"
+version = "0.1.0"
+description = "Discord Bot to share messages from the RoboCupJunior Forum"
+authors = ["robocup-junior"]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+# These come from conda-forge
+[dependencies]
+python = ">=3.11"
+pip = "*"
+
+[pypi-dependencies]
+discord = ">=2.3.2"
+python-dotenv = ">=1.0.0"
+feedparser = ">=6.0.0"
+beautifulsoup4 = "*"
+
+[tasks]
+start = "python bot.py"
+dev = "python bot.py"
