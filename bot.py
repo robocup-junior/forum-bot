@@ -215,8 +215,11 @@ async def rss_checker():
             print(f"  WARNING: {len(new_posts)} new posts, capping at {MAX_POSTS_PER_CYCLE}")
             new_posts = new_posts[:MAX_POSTS_PER_CYCLE]
 
-        # Update seen IDs: keep only IDs still in feed (natural cleanup)
-        state[feed_url] = [e.id for e in entries]
+        # Update seen IDs: keep IDs still in feed + mark posted ones as seen
+        # (only mark posted items so backlog can catch up over subsequent cycles)
+        current_feed_ids = {e.id for e in entries}
+        posted_ids = {e.id for e in new_posts}
+        state[feed_url] = list((seen_ids & current_feed_ids) | posted_ids)
         save_state(state)
 
         if not new_posts:
