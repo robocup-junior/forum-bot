@@ -208,7 +208,7 @@ async def rss_checker():
             channel = bot.get_channel(channel_id)
             if channel:
                 await post_entry(channel, entries[0], feed_url, prefix="Initial Post")
-            state[feed_url] = [e.id for e in entries]
+            state[feed_url] = sorted(e.id for e in entries)
             save_state(state)
             continue
 
@@ -224,7 +224,7 @@ async def rss_checker():
         # (only mark posted items so backlog can catch up over subsequent cycles)
         current_feed_ids = {e.id for e in entries}
         posted_ids = {e.id for e in new_posts}
-        state[feed_url] = list((seen_ids & current_feed_ids) | posted_ids)
+        state[feed_url] = sorted((seen_ids & current_feed_ids) | posted_ids)
         save_state(state)
 
         if not new_posts:
