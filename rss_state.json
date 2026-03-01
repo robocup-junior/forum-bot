@@ -1,6 +1,5 @@
 {
   "https://junior.forum.robocup.org/c/robocupjunior-rescue/robocupjunior-rescue-line/10.rss": [
-    "junior.forum.robocup.org-topic-4362",
     "junior.forum.robocup.org-topic-4436",
     "junior.forum.robocup.org-topic-4484",
     "junior.forum.robocup.org-topic-4498",
@@ -24,7 +23,8 @@
     "junior.forum.robocup.org-topic-5011",
     "junior.forum.robocup.org-topic-5038",
     "junior.forum.robocup.org-topic-5090",
-    "junior.forum.robocup.org-topic-5161"
+    "junior.forum.robocup.org-topic-5161",
+    "junior.forum.robocup.org-topic-5175"
   ],
   "https://junior.forum.robocup.org/c/robocupjunior-rescue/robocupjunior-rescue-maze/11.rss": [
     "junior.forum.robocup.org-topic-3911",
@@ -135,6 +135,7 @@
     "junior.forum.robocup.org-topic-5110"
   ],
   "https://junior.forum.robocup.org/c/general/1.rss": [
+    "junior.forum.robocup.org-topic-3560",
     "junior.forum.robocup.org-topic-3650",
     "junior.forum.robocup.org-topic-3658",
     "junior.forum.robocup.org-topic-3681",
@@ -158,11 +159,9 @@
     "junior.forum.robocup.org-topic-4623",
     "junior.forum.robocup.org-topic-4701",
     "junior.forum.robocup.org-topic-4762",
-    "junior.forum.robocup.org-topic-5069",
-    "junior.forum.robocup.org-topic-5175"
+    "junior.forum.robocup.org-topic-5069"
   ],
   "https://junior.forum.robocup.org/c/robocupjunior-rescue/6.rss": [
-    "junior.forum.robocup.org-topic-4815",
     "junior.forum.robocup.org-topic-4818",
     "junior.forum.robocup.org-topic-4827",
     "junior.forum.robocup.org-topic-4831",
@@ -186,6 +185,7 @@
     "junior.forum.robocup.org-topic-5123",
     "junior.forum.robocup.org-topic-5161",
     "junior.forum.robocup.org-topic-5164",
-    "junior.forum.robocup.org-topic-5172"
+    "junior.forum.robocup.org-topic-5172",
+    "junior.forum.robocup.org-topic-5175"
   ]
 }
