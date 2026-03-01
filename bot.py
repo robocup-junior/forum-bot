@@ -30,6 +30,37 @@ FEEDS = {
     "https://junior.forum.robocup.org/c/general/1.rss": 1446904054705029301,
 }
 
+# Channel ID for each category (used when remapping misposted topics)
+CATEGORY_CHANNELS = {
+    "rescue-line": 1456660154169692162,
+    "rescue-maze": 1456660460228051147,
+    "rescue-sim":  1456660650356117635,
+    "rescue":      1466328513991933983,
+    "soccer":      1446903879345373254,
+    "onstage":     1446903820805345471,
+    "general":     1446904054705029301,
+}
+
+# Keywords to detect if a post title clearly belongs to a specific category
+CATEGORY_KEYWORDS = {
+    "rescue-line": [
+        "rescue line", "line following", "line follower", "line maze", "line robot",
+    ],
+    "rescue-maze": [
+        "rescue maze", "maze solving", "maze robot", "maze navigation",
+    ],
+    "rescue-sim": [
+        "rescue simulation", "rescue sim", "erebus", "webots",
+    ],
+    "soccer": [
+        "soccer", "football", "dribbler", "kicker", "ball detection",
+        "open challenge soccer",
+    ],
+    "onstage": [
+        "onstage", "on stage", "on-stage", "dance robot", "performance robot",
+    ],
+}
+
 CATEGORY_EMOJIS = {
     "rescue-line": "🟢",
     "rescue-maze": "🔴",
@@ -127,6 +158,28 @@ async def on_ready():
 # -------------------------------------
 # Determine category appearance
 # -------------------------------------
+def get_feed_category(feed_url):
+    if "rescue-line" in feed_url:       return "rescue-line"
+    if "rescue-maze" in feed_url:       return "rescue-maze"
+    if "rescue-simulation" in feed_url: return "rescue-sim"
+    if "robocupjunior-rescue" in feed_url: return "rescue"
+    if "soccer" in feed_url:            return "soccer"
+    if "onstage" in feed_url:           return "onstage"
+    return "general"
+
+
+def remap_category(title, current_category):
+    """Return a different category key if the title clearly signals a mismatch, else current."""
+    title_lower = title.lower()
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        if category == current_category:
+            continue
+        if any(kw in title_lower for kw in keywords):
+            print(f"  Remapping '{title}' from '{current_category}' → '{category}'")
+            return category
+    return current_category
+
+
 def get_category_style(feed_url):
     if "rescue-line" in feed_url:
         return CATEGORY_EMOJIS["rescue-line"], CATEGORY_COLORS["rescue-line"]
@@ -230,14 +283,19 @@ async def rss_checker():
         if not new_posts:
             continue
 
-        # Post new items (oldest first)
-        channel = bot.get_channel(channel_id)
-        if channel is None:
-            print(f"ERROR: Channel {channel_id} not found.")
-            continue
-
+        # Post new items (oldest first), remapping to correct channel if needed
+        current_category = get_feed_category(feed_url)
         for entry in reversed(new_posts):
-            await post_entry(channel, entry, feed_url)
+            target_category = remap_category(entry.title, current_category)
+            target_channel_id = CATEGORY_CHANNELS.get(target_category, channel_id)
+            target_channel = bot.get_channel(target_channel_id)
+            if target_channel is None:
+                print(f"ERROR: Channel {target_channel_id} not found, falling back.")
+                target_channel = bot.get_channel(channel_id)
+            if target_channel is None:
+                print(f"ERROR: Channel {channel_id} not found.")
+                continue
+            await post_entry(target_channel, entry, feed_url)
 
 # -------------------------------------
 # Run bot
