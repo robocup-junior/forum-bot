@@ -249,6 +249,8 @@ async def rss_checker():
 
         # Get set of seen IDs for this feed
         seen_ids = set(state.get(feed_url, []))
+        # Also check all other feeds to catch posts that were moved by a moderator
+        all_seen_ids = {id for ids in state.values() for id in ids}
 
         # First run → mark all current entries as seen, post only the latest
         if not seen_ids:
@@ -260,8 +262,8 @@ async def rss_checker():
             save_state(state)
             continue
 
-        # Find new posts (entries we haven't seen before)
-        new_posts = [e for e in entries if e.id not in seen_ids]
+        # Find new posts (entries we haven't seen before in any feed)
+        new_posts = [e for e in entries if e.id not in all_seen_ids]
 
         # Safety cap to prevent mass reposts
         if len(new_posts) > MAX_POSTS_PER_CYCLE:
