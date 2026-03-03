@@ -4,7 +4,6 @@ import json
 import discord
 import feedparser
 from discord.ext import tasks, commands
-from discord import app_commands
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 
@@ -28,6 +27,41 @@ FEEDS = {
     "https://junior.forum.robocup.org/c/robocupjunior-soccer/5.rss": 1446903879345373254,
     "https://junior.forum.robocup.org/c/robocupjunior-onstage/7.rss": 1446903820805345471,
     "https://junior.forum.robocup.org/c/general/1.rss": 1446904054705029301,
+}
+
+# Derived from FEEDS to avoid duplication — single source of truth for channel IDs
+def _build_category_channels(feeds):
+    result = {}
+    for url, channel_id in feeds.items():
+        if "rescue-line" in url:          result["rescue-line"] = channel_id
+        elif "rescue-maze" in url:        result["rescue-maze"] = channel_id
+        elif "rescue-simulation" in url:  result["rescue-sim"]  = channel_id
+        elif "robocupjunior-rescue" in url: result["rescue"]    = channel_id
+        elif "soccer" in url:             result["soccer"]      = channel_id
+        elif "onstage" in url:            result["onstage"]     = channel_id
+        else:                             result["general"]     = channel_id
+    return result
+
+CATEGORY_CHANNELS = _build_category_channels(FEEDS)
+
+# Keywords to detect if a post title clearly belongs to a specific category
+CATEGORY_KEYWORDS = {
+    "rescue-line": [
+        "rescue line", "line following", "line follower", "line maze", "line robot",
+    ],
+    "rescue-maze": [
+        "rescue maze", "maze solving", "maze robot", "maze navigation",
+    ],
+    "rescue-sim": [
+        "rescue simulation", "rescue sim", "erebus", "webots",
+    ],
+    "soccer": [
+        "soccer", "football", "dribbler", "kicker", "ball detection",
+        "open challenge soccer",
+    ],
+    "onstage": [
+        "onstage", "on stage", "on-stage", "dance robot", "performance robot",
+    ],
 }
 
 CATEGORY_EMOJIS = {
@@ -127,27 +161,40 @@ async def on_ready():
 # -------------------------------------
 # Determine category appearance
 # -------------------------------------
-def get_category_style(feed_url):
-    if "rescue-line" in feed_url:
-        return CATEGORY_EMOJIS["rescue-line"], CATEGORY_COLORS["rescue-line"]
-    if "rescue-maze" in feed_url:
-        return CATEGORY_EMOJIS["rescue-maze"], CATEGORY_COLORS["rescue-maze"]
-    if "rescue-simulation" in feed_url:
-        return CATEGORY_EMOJIS["rescue-sim"], CATEGORY_COLORS["rescue-sim"]
-    if "robocupjunior-rescue" in feed_url:
-        return CATEGORY_EMOJIS["rescue"], CATEGORY_COLORS["rescue"]
-    if "soccer" in feed_url:
-        return CATEGORY_EMOJIS["soccer"], CATEGORY_COLORS["soccer"]
-    if "onstage" in feed_url:
-        return CATEGORY_EMOJIS["onstage"], CATEGORY_COLORS["onstage"]
-    return CATEGORY_EMOJIS["general"], CATEGORY_COLORS["general"]
+def get_feed_category(feed_url):
+    if "rescue-line" in feed_url:       return "rescue-line"
+    if "rescue-maze" in feed_url:       return "rescue-maze"
+    if "rescue-simulation" in feed_url: return "rescue-sim"
+    if "robocupjunior-rescue" in feed_url: return "rescue"
+    if "soccer" in feed_url:            return "soccer"
+    if "onstage" in feed_url:           return "onstage"
+    return "general"
+
+
+def remap_category(title, current_category):
+    """Return a different category key if the title unambiguously signals a mismatch, else current."""
+    title_lower = title.lower()
+    matches = [
+        cat for cat, keywords in CATEGORY_KEYWORDS.items()
+        if cat != current_category and any(kw in title_lower for kw in keywords)
+    ]
+    if len(matches) == 1:
+        print(f"  Remapping '{title}' from '{current_category}' → '{matches[0]}'")
+        return matches[0]
+    if len(matches) > 1:
+        print(f"  Ambiguous match for '{title}' ({matches}), keeping '{current_category}'")
+    return current_category
+
+
+def get_category_style(category):
+    return CATEGORY_EMOJIS[category], CATEGORY_COLORS[category]
 
 
 # -------------------------------------
 # Helper: Post entry
 # -------------------------------------
-async def post_entry(channel, entry, feed_url, prefix="New Post"):
-    emoji, color = get_category_style(feed_url)
+async def post_entry(channel, entry, category, prefix="New Post"):
+    emoji, color = get_category_style(category)
 
     raw_html = entry.get("summary", "")
     clean_text = clean_html(raw_html)
@@ -179,7 +226,7 @@ async def forcepost(interaction: discord.Interaction):
             continue
 
         for entry in reversed(entries):
-            await post_entry(channel, entry, feed_url, prefix="Forced Post")
+            await post_entry(channel, entry, get_feed_category(feed_url), prefix="Forced Post")
 
     print("Forcepost complete.")
 
@@ -201,43 +248,51 @@ async def rss_checker():
 
         # Get set of seen IDs for this feed
         seen_ids = set(state.get(feed_url, []))
+        # Also check all other feeds to catch posts that were moved by a moderator
+        all_seen_ids = {id for ids in state.values() for id in ids}
 
         # First run → mark all current entries as seen, post only the latest
         if not seen_ids:
             print("  First run: posting initial entry")
             channel = bot.get_channel(channel_id)
             if channel:
-                await post_entry(channel, entries[0], feed_url, prefix="Initial Post")
+                await post_entry(channel, entries[0], get_feed_category(feed_url), prefix="Initial Post")
             state[feed_url] = sorted(e.id for e in entries)
             save_state(state)
             continue
 
-        # Find new posts (entries we haven't seen before)
-        new_posts = [e for e in entries if e.id not in seen_ids]
+        # Find new posts (entries we haven't seen before in any feed)
+        new_posts = [e for e in entries if e.id not in all_seen_ids]
 
         # Safety cap to prevent mass reposts
         if len(new_posts) > MAX_POSTS_PER_CYCLE:
             print(f"  WARNING: {len(new_posts)} new posts, capping at {MAX_POSTS_PER_CYCLE}")
             new_posts = new_posts[:MAX_POSTS_PER_CYCLE]
 
-        # Update seen IDs: keep IDs still in feed + mark posted ones as seen
-        # (only mark posted items so backlog can catch up over subsequent cycles)
+        # Prune stale IDs (no longer in the feed) from per-feed state
         current_feed_ids = {e.id for e in entries}
         posted_ids = {e.id for e in new_posts}
         state[feed_url] = sorted((seen_ids & current_feed_ids) | posted_ids)
-        save_state(state)
 
         if not new_posts:
+            save_state(state)
             continue
 
-        # Post new items (oldest first)
-        channel = bot.get_channel(channel_id)
-        if channel is None:
-            print(f"ERROR: Channel {channel_id} not found.")
-            continue
-
+        # Post new items (oldest first), remapping to correct channel if needed
+        current_category = get_feed_category(feed_url)
         for entry in reversed(new_posts):
-            await post_entry(channel, entry, feed_url)
+            target_category = remap_category(entry.title, current_category)
+            target_channel_id = CATEGORY_CHANNELS.get(target_category, channel_id)
+            target_channel = bot.get_channel(target_channel_id)
+            if target_channel is None:
+                print(f"ERROR: Channel {target_channel_id} not found, falling back.")
+                target_channel = bot.get_channel(channel_id)
+            if target_channel is None:
+                print(f"ERROR: Channel {channel_id} not found.")
+                continue
+            await post_entry(target_channel, entry, target_category)
+
+        save_state(state)
 
 # -------------------------------------
 # Run bot
